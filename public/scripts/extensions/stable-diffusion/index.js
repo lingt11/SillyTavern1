@@ -75,6 +75,8 @@ let activeGenerations = 0;
 /** @type {JQuery<HTMLElement>|null} */
 let generationToast = null;
 
+let loadModelsGeneration = 0;
+
 const sources = {
     extras: 'extras',
     horde: 'horde',
@@ -1853,7 +1855,7 @@ async function loadComfySamplers() {
 }
 
 async function loadModels() {
-    $('#sd_model').empty();
+    const generation = ++loadModelsGeneration;
     let models = [];
 
     switch (extension_settings.sd.source) {
@@ -1935,6 +1937,12 @@ async function loadModels() {
         ensureElectronHubQualitySelect(models);
     }
 
+    // Discard results if a newer loadModels() call has started
+    if (generation !== loadModelsGeneration) {
+        return;
+    }
+
+    $('#sd_model').empty();
     switchModelSpecificControls(extension_settings.sd.model);
 
     for (const model of models) {
@@ -5847,6 +5855,7 @@ jQuery(async () => {
                 [sources.aimlapi]: SECRET_KEYS.AIMLAPI,
                 [sources.comfy]: SECRET_KEYS.COMFY_RUNPOD,
                 [sources.pollinations]: SECRET_KEYS.POLLINATIONS,
+                [sources.siliconflow]: SECRET_KEYS.SILICONFLOW,
             };
             const shouldReloadOptions = Object.entries(keySourceMap).some(([k, v]) => k === extension_settings.sd.source && v === key);
             if (!shouldReloadOptions) {

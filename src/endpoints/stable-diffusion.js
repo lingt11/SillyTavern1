@@ -2027,8 +2027,9 @@ siliconflow.post('/models', async (request, response) => {
         let pageNum = 1;
         /** @type {any[]} */
         let allModels = [];
+        let hasMorePages = true;
 
-        do {
+        while (hasMorePages) {
             const modelsUrl = new URL(`${API_SILICONFLOW_IMAGES}/models`);
             modelsUrl.searchParams.set('type', 'image');
             modelsUrl.searchParams.set('page_num', String(pageNum));
@@ -2055,15 +2056,10 @@ siliconflow.post('/models', async (request, response) => {
                 return response.sendStatus(500);
             }
 
-            allModels = allModels.concat(data.data);
-
-            // Stop if we received fewer items than the page size (last page)
-            if (data.data.length < pageSize) {
-                break;
-            }
-
+            allModels.push(...data.data);
+            hasMorePages = data.data.length === pageSize;
             pageNum++;
-        } while (true);
+        }
 
         const models = allModels
             .map(x => ({ value: x.id, text: x.id }))
