@@ -2010,7 +2010,7 @@ zai.post('/generate-video', async (request, response) => {
     }
 });
 
-const API_SILICONFLOW_IMAGES = 'https://api.siliconflow.cn/v1';
+const API_SILICONFLOW_IMAGES = 'https://api.siliconflow.com/v1';
 
 const siliconflow = express.Router();
 
