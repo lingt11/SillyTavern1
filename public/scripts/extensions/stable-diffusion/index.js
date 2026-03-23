@@ -99,6 +99,7 @@ const sources = {
     google: 'google',
     zai: 'zai',
     openrouter: 'openrouter',
+    siliconflow: 'siliconflow',
 };
 const comfyTypes = {
     standard: 'standard',
@@ -1700,6 +1701,9 @@ async function loadSamplers() {
         case sources.openrouter:
             samplers = ['N/A'];
             break;
+        case sources.siliconflow:
+            samplers = ['N/A'];
+            break;
     }
 
     for (const sampler of samplers) {
@@ -1922,6 +1926,9 @@ async function loadModels() {
         case sources.openrouter:
             models = await loadOpenRouterModels();
             break;
+        case sources.siliconflow:
+            models = await loadSiliconFlowModels();
+            break;
     }
 
     if (extension_settings.sd.source === sources.electronhub) {
@@ -2142,6 +2149,24 @@ async function loadNanoGPTModels() {
     }
 
     const result = await fetch('/api/sd/nanogpt/models', {
+        method: 'POST',
+        headers: getRequestHeaders({ omitContentType: true }),
+    });
+
+    if (result.ok) {
+        return await result.json();
+    }
+
+    return [];
+}
+
+async function loadSiliconFlowModels() {
+    if (!secret_state[SECRET_KEYS.SILICONFLOW]) {
+        console.debug('SiliconFlow API key is not set.');
+        return [];
+    }
+
+    const result = await fetch('/api/sd/siliconflow/models', {
         method: 'POST',
         headers: getRequestHeaders({ omitContentType: true }),
     });
@@ -2533,6 +2558,9 @@ async function loadSchedulers() {
         case sources.openrouter:
             schedulers = ['N/A'];
             break;
+        case sources.siliconflow:
+            schedulers = ['N/A'];
+            break;
     }
 
     for (const scheduler of schedulers) {
@@ -2651,6 +2679,9 @@ async function loadVaes() {
             vaes = ['N/A'];
             break;
         case sources.openrouter:
+            vaes = ['N/A'];
+            break;
+        case sources.siliconflow:
             vaes = ['N/A'];
             break;
     }
@@ -3342,6 +3373,9 @@ async function sendGenerationRequest(generationType, prompt, additionalNegativeP
                 break;
             case sources.openrouter:
                 result = await generateOpenRouterImage(prefixedPrompt, signal);
+                break;
+            case sources.siliconflow:
+                result = await generateSiliconFlowImage(prefixedPrompt, negativePrompt, signal);
                 break;
         }
 
@@ -4365,6 +4399,38 @@ async function generateNanoGPTImage(prompt, negativePrompt, signal) {
 }
 
 /**
+ * Generates an image using the SiliconFlow API.
+ * @param {string} prompt - The main instruction used to guide the image generation.
+ * @param {string} negativePrompt - The instruction used to restrict the image generation.
+ * @param {AbortSignal} signal - An AbortSignal object that can be used to cancel the request.
+ * @returns {Promise<{format: string, data: string}>} - A promise that resolves when the image generation and processing are complete.
+ */
+async function generateSiliconFlowImage(prompt, negativePrompt, signal) {
+    const result = await fetch('/api/sd/siliconflow/generate', {
+        method: 'POST',
+        headers: getRequestHeaders(),
+        signal: signal,
+        body: JSON.stringify({
+            model: extension_settings.sd.model,
+            prompt: prompt,
+            negative_prompt: negativePrompt,
+            image_size: `${extension_settings.sd.width}x${extension_settings.sd.height}`,
+            num_inference_steps: extension_settings.sd.steps,
+            guidance_scale: extension_settings.sd.scale,
+            seed: extension_settings.sd.seed >= 0 ? extension_settings.sd.seed : undefined,
+        }),
+    });
+
+    if (result.ok) {
+        const data = await result.json();
+        return { format: 'jpg', data: data.image };
+    } else {
+        const text = await result.text();
+        throw new Error(text);
+    }
+}
+
+/**
  * Generates an image using the BFL API.
  * @param {string} prompt - The main instruction used to guide the image generation.
  * @param {AbortSignal} signal - An AbortSignal object that can be used to cancel the request.
@@ -5002,6 +5068,8 @@ function isValidState() {
             return secret_state[SECRET_KEYS.ZAI];
         case sources.openrouter:
             return secret_state[SECRET_KEYS.OPENROUTER];
+        case sources.siliconflow:
+            return secret_state[SECRET_KEYS.SILICONFLOW];
         default:
             return false;
     }
