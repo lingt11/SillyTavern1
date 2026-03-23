@@ -2010,6 +2010,119 @@ zai.post('/generate-video', async (request, response) => {
     }
 });
 
+const API_SILICONFLOW_IMAGES = 'https://api.siliconflow.cn/v1';
+
+const siliconflow = express.Router();
+
+siliconflow.post('/models', async (request, response) => {
+    try {
+        const key = readSecret(request.user.directories, SECRET_KEYS.SILICONFLOW);
+
+        if (!key) {
+            console.warn('SiliconFlow key not found.');
+            return response.sendStatus(400);
+        }
+
+        const modelsResponse = await fetch(`${API_SILICONFLOW_IMAGES}/models`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!modelsResponse.ok) {
+            console.warn('SiliconFlow returned an error.');
+            return response.sendStatus(500);
+        }
+
+        /** @type {any} */
+        const data = await modelsResponse.json();
+
+        if (!Array.isArray(data?.data)) {
+            console.warn('SiliconFlow returned invalid data.');
+            return response.sendStatus(500);
+        }
+
+        // Filter image generation models by known provider namespaces
+        const imageModelPrefixes = ['stabilityai/', 'black-forest-labs/', 'Kwai-Kolors/', 'Pro/'];
+        const models = data.data
+            .filter(x => imageModelPrefixes.some(prefix => String(x.id).startsWith(prefix)) || String(x.id).toLowerCase().includes('flux') || String(x.id).toLowerCase().includes('stable-diffusion') || String(x.id).toLowerCase().includes('kolors'))
+            .map(x => ({ value: x.id, text: x.id }))
+            .sort((a, b) => a.text.localeCompare(b.text));
+        return response.send(models);
+    } catch (error) {
+        console.error(error);
+        return response.sendStatus(500);
+    }
+});
+
+siliconflow.post('/generate', async (request, response) => {
+    try {
+        const key = readSecret(request.user.directories, SECRET_KEYS.SILICONFLOW);
+
+        if (!key) {
+            console.warn('SiliconFlow key not found.');
+            return response.sendStatus(400);
+        }
+
+        const requestBody = {
+            model: request.body.model,
+            prompt: request.body.prompt,
+            image_size: request.body.image_size,
+            batch_size: 1,
+            num_inference_steps: request.body.num_inference_steps,
+            guidance_scale: request.body.guidance_scale,
+            seed: request.body.seed,
+        };
+
+        if (request.body.negative_prompt) {
+            requestBody.negative_prompt = request.body.negative_prompt;
+        }
+
+        console.debug('SiliconFlow request:', requestBody);
+
+        const result = await fetch(`${API_SILICONFLOW_IMAGES}/images/generations`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+        });
+
+        if (!result.ok) {
+            const errorText = await result.text();
+            console.warn('SiliconFlow returned an error.', result.status, result.statusText, errorText);
+            return response.sendStatus(500);
+        }
+
+        /** @type {any} */
+        const data = await result.json();
+        const imageUrl = data?.images?.[0]?.url;
+
+        if (!imageUrl || !isValidUrl(imageUrl)) {
+            console.warn('SiliconFlow returned invalid data.');
+            return response.sendStatus(500);
+        }
+
+        const fetchResult = await fetch(imageUrl);
+        if (!fetchResult.ok) {
+            const text = await fetchResult.text();
+            console.warn('SiliconFlow image fetch failed.', fetchResult.statusText, text);
+            return response.sendStatus(500);
+        }
+
+        const arrayBuffer = await fetchResult.arrayBuffer();
+        const image = Buffer.from(arrayBuffer).toString('base64');
+
+        return response.send({ image });
+    } catch (error) {
+        console.error(error);
+        return response.sendStatus(500);
+    }
+});
+
 router.use('/comfy', comfy);
 router.use('/comfyrunpod', comfyRunPod);
 router.use('/together', together);
@@ -2026,3 +2139,4 @@ router.use('/falai', falai);
 router.use('/xai', xai);
 router.use('/aimlapi', aimlapi);
 router.use('/zai', zai);
+router.use('/siliconflow', siliconflow);
