@@ -2023,31 +2023,45 @@ siliconflow.post('/models', async (request, response) => {
             return response.sendStatus(400);
         }
 
-        const modelsResponse = await fetch(`${API_SILICONFLOW_IMAGES}/models`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${key}`,
-                'Content-Type': 'application/json',
-            },
-        });
+        const pageSize = 100;
+        let pageNum = 1;
+        /** @type {any[]} */
+        let allModels = [];
+        let hasMorePages = true;
 
-        if (!modelsResponse.ok) {
-            console.warn('SiliconFlow returned an error.');
-            return response.sendStatus(500);
+        while (hasMorePages) {
+            const modelsUrl = new URL(`${API_SILICONFLOW_IMAGES}/models`);
+            modelsUrl.searchParams.set('type', 'image');
+            modelsUrl.searchParams.set('page_num', String(pageNum));
+            modelsUrl.searchParams.set('page_size', String(pageSize));
+
+            const modelsResponse = await fetch(modelsUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${key}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!modelsResponse.ok) {
+                console.warn('SiliconFlow returned an error.');
+                return response.sendStatus(500);
+            }
+
+            /** @type {any} */
+            const data = await modelsResponse.json();
+
+            if (!Array.isArray(data?.data)) {
+                console.warn('SiliconFlow returned invalid data.');
+                return response.sendStatus(500);
+            }
+
+            allModels.push(...data.data);
+            hasMorePages = data.data.length === pageSize;
+            pageNum++;
         }
 
-        /** @type {any} */
-        const data = await modelsResponse.json();
-
-        if (!Array.isArray(data?.data)) {
-            console.warn('SiliconFlow returned invalid data.');
-            return response.sendStatus(500);
-        }
-
-        // Filter image generation models by known provider namespaces
-        const imageModelPrefixes = ['stabilityai/', 'black-forest-labs/', 'Kwai-Kolors/', 'Pro/'];
-        const models = data.data
-            .filter(x => imageModelPrefixes.some(prefix => String(x.id).startsWith(prefix)) || String(x.id).toLowerCase().includes('flux') || String(x.id).toLowerCase().includes('stable-diffusion') || String(x.id).toLowerCase().includes('kolors'))
+        const models = allModels
             .map(x => ({ value: x.id, text: x.id }))
             .sort((a, b) => a.text.localeCompare(b.text));
         return response.send(models);
