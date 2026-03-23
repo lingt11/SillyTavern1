@@ -5790,6 +5790,7 @@ jQuery(async () => {
     $('#sd_huggingface_model_id').on('input', onHFModelInput);
     $('#sd_function_tool').on('input', onFunctionToolInput);
     $('#sd_bfl_upsampling').on('input', onBflUpsamplingInput);
+    $('#sd_siliconflow_refresh').on('click', loadModels);
 
     $('#sd_google_api').on('input', function () {
         extension_settings.sd.google_api = String($(this).val());
